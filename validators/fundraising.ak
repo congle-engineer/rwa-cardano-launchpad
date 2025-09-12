@@ -124,7 +124,7 @@ validator fundraising {
             let is_signed_by_contributor = list.has(extra_signatories, contributor_pkh)
 
             if !is_contribution_correct {
-              trace @"[Contract Error]: contribution amount mismatch"
+              trace @"[Contract Error]: contribution amount mismatch."
               False
             } else if !is_within_target {
               trace @"[Contract Error]: contribution exceeds target amount"
