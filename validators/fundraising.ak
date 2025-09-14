@@ -2,7 +2,7 @@ use cardano/assets.{lovelace_of}
 use cardano/transaction.{Transaction, OutputReference, InlineDatum, Output}
 use aiken/crypto.{VerificationKeyHash}
 use aiken/collection/list
-use cardano/address.{Address}
+use cardano/address.{VerificationKey}
 
 // Constants
 //const lovelace_per_ada: Int = 1_000_000
@@ -25,8 +25,8 @@ pub type Datum {
 
 pub type Redeemer {
   UserContribute(Int, VerificationKeyHash)  // current_time, contributor_pkh
-  UserClaimRefund(Int, VerificationKeyHash, Address) // current_time, contributor_pkh, address
-  OwnerWithdraw(Int, Address)       // current_time, address
+  UserClaimRefund(Int, VerificationKeyHash) // current_time, contributor_pkh
+  OwnerWithdraw(Int)       // current_time
   OwnerDistributeRWA(Int)  // current_time
 }
 
@@ -66,10 +66,10 @@ fn remove_contributor(contributors: List<ContributorInfo>, contributor_pkh: Veri
 }
 
 // Helper function to validate output goes to specific address
-fn validate_output_to_address(outputs: List<Output>, target_address: Address, min_amount: Int) -> Bool {
+fn validate_output_to_address(outputs: List<Output>, target_pkh: VerificationKeyHash, min_amount: Int) -> Bool {
   outputs
     |> list.any(fn(output) { 
-      output.address == target_address && lovelace_of(output.value) >= min_amount 
+      output.address.payment_credential == VerificationKey(target_pkh) && lovelace_of(output.value) >= min_amount 
     })
 }
 
@@ -157,7 +157,7 @@ validator fundraising {
         }
       }
 
-      UserClaimRefund(current_time, contributor_pkh, contributor_address) -> {
+      UserClaimRefund(current_time, contributor_pkh) -> {
         let is_after_end = current_time > end_date
         let is_failed = current_raised < target_amount
         let is_signed_by_contributor = list.has(extra_signatories, contributor_pkh)
@@ -177,7 +177,7 @@ validator fundraising {
           let refund_amount_lovelace = contributor_info.amount
           
           // Validate that refund is sent to the contributor
-          let is_refund_sent = validate_output_to_address(outputs, contributor_address, refund_amount_lovelace)
+          let is_refund_sent = validate_output_to_address(outputs, contributor_pkh, refund_amount_lovelace)
           
           if !is_refund_sent {
             trace @"[Contract Error]: refund not properly sent to contributor"
@@ -201,7 +201,7 @@ validator fundraising {
         }
       }
 
-      OwnerWithdraw(current_time, owner_address) -> {
+      OwnerWithdraw(current_time) -> {
         let is_after_end = current_time > end_date
         let is_target_reached = current_raised >= target_amount  // Allow over-funding
         let is_owner = list.has(extra_signatories, owner_pkh)
@@ -219,7 +219,7 @@ validator fundraising {
           // Validate that funds are actually sent to owner
           let withdrawal_amount = current_raised
           
-          let is_withdrawal_sent = validate_output_to_address(outputs, owner_address, withdrawal_amount)
+          let is_withdrawal_sent = validate_output_to_address(outputs, owner_pkh, withdrawal_amount)
           
           if !is_withdrawal_sent {
             trace @"[Contract Error]: funds not properly sent to owner"
